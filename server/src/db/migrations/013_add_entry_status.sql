@@ -1,0 +1,1 @@
+ALTER TABLE phone_list_entries ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending';

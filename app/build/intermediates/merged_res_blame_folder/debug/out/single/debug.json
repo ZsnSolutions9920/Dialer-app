@@ -1,0 +1,54 @@
+[
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-xhdpi_ic_launcher_round.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-xhdpi/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-mdpi_ic_launcher.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-mdpi/ic_launcher.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-hdpi_ic_launcher_round.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-hdpi/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-xxxhdpi_ic_launcher_round.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-xxxhdpi/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.customdialer.app-main-56:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-xhdpi_ic_launcher.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-xhdpi/ic_launcher.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.customdialer.app-main-56:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-xxhdpi_ic_launcher.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-xxhdpi/ic_launcher.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-mdpi_ic_launcher_round.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-mdpi/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-xxxhdpi_ic_launcher.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-xxxhdpi/ic_launcher.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-xxhdpi_ic_launcher_round.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-xxhdpi/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/xml_network_security_config.xml.flat",
+        "source": "com.customdialer.app-main-56:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "com.customdialer.app-merged_res-54:/mipmap-hdpi_ic_launcher.xml.flat",
+        "source": "com.customdialer.app-main-56:/mipmap-hdpi/ic_launcher.xml"
+    }
+]

@@ -1,0 +1,3 @@
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_card_last4 VARCHAR(4);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_card_brand VARCHAR(20);

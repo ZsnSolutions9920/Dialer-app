@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Custom Dialer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f6fa;color:#1a1a2e;min-height:100vh}
+
+/* Login */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#4361ee 0%,#3a56d4 100%)}
+.login-card{background:#fff;border-radius:16px;padding:40px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
+.login-card h1{text-align:center;margin-bottom:4px;color:#1a1a2e;font-size:24px}
+.login-card p{text-align:center;color:#888;margin-bottom:28px;font-size:14px}
+.login-card input{width:100%;padding:12px 16px;background:#f5f6fa;border:1.5px solid #e0e0e8;border-radius:10px;color:#1a1a2e;font-size:15px;outline:none;margin-bottom:16px}
+.login-card input:focus{border-color:#4361ee;background:#fff}
+.login-card button{width:100%;padding:13px;background:#4361ee;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s}
+.login-card button:hover{background:#3a56d4}
+.err-msg{color:#e53935;font-size:13px;text-align:center;margin-bottom:12px}
+
+/* Layout */
+.app{display:none;height:100vh;overflow:hidden}
+.sidebar{width:240px;background:#fff;border-right:1px solid #e8e8f0;display:flex;flex-direction:column;height:100vh;flex-shrink:0}
+.sidebar .logo{padding:24px 20px 20px;font-size:18px;font-weight:700;color:#1a1a2e;border-bottom:1px solid #e8e8f0}
+.sidebar .logo span{color:#4361ee}
+.sidebar nav{flex:1;padding:12px 10px}
+.sidebar nav a{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;color:#666;font-size:14px;font-weight:500;text-decoration:none;margin-bottom:2px;transition:all .15s}
+.sidebar nav a:hover{background:#f0f1ff;color:#4361ee}
+.sidebar nav a.active{background:#4361ee;color:#fff}
+.sidebar nav a svg{width:18px;height:18px;flex-shrink:0}
+.sidebar .bottom{padding:16px;border-top:1px solid #e8e8f0}
+
+.content{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.topbar{background:#fff;border-bottom:1px solid #e8e8f0;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.topbar h2{font-size:20px;font-weight:600;color:#1a1a2e}
+.page{padding:28px;flex:1}
+.page-section{display:none}
+.page-section.active{display:block}
+
+/* Buttons */
+.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:#4361ee;color:#fff}.btn-primary:hover{background:#3651d4}
+.btn-success{background:#00c853;color:#fff}.btn-success:hover{background:#00a844}
+.btn-danger{background:#e53935;color:#fff}.btn-danger:hover{background:#c62828}
+.btn-outline{background:#fff;border:1.5px solid #e0e0e8;color:#666}.btn-outline:hover{border-color:#4361ee;color:#4361ee}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-ghost{background:none;border:none;color:#4361ee;font-weight:600;cursor:pointer;font-size:13px;padding:4px 8px}.btn-ghost:hover{text-decoration:underline}
+
+/* Stats */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.stat{background:#fff;border:1px solid #e8e8f0;border-radius:14px;padding:20px 22px}
+.stat .label{font-size:13px;color:#888;margin-bottom:2px}
+.stat .val{font-size:30px;font-weight:700;color:#1a1a2e}
+.stat.green .val{color:#00c853}
+.stat.red .val{color:#e53935}
+.stat.blue .val{color:#4361ee}
+
+/* Tables */
+.card{background:#fff;border:1px solid #e8e8f0;border-radius:14px;overflow:hidden;margin-bottom:24px}
+.card-header{padding:16px 20px;border-bottom:1px solid #e8e8f0;display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:16px;font-weight:600;color:#1a1a2e}
+table{width:100%;border-collapse:collapse}
+thead th{background:#f8f9fc;padding:11px 16px;text-align:left;font-size:11px;text-transform:uppercase;color:#888;font-weight:700;letter-spacing:.5px}
+tbody td{padding:12px 16px;border-top:1px solid #f0f0f5;font-size:14px;color:#333}
+tbody tr:hover{background:#f8f9fc}
+.empty-row{text-align:center;padding:48px 20px;color:#aaa}
+
+/* Tags */
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.tag-green{background:#e8f5e9;color:#2e7d32}
+.tag-red{background:#ffebee;color:#c62828}
+.tag-blue{background:#e8eaf6;color:#283593}
+.tag-gray{background:#f5f5f5;color:#757575}
+.tag-gold{background:#fff8e1;color:#f57f17}
+
+/* Select */
+select{padding:6px 10px;background:#f8f9fc;border:1.5px solid #e0e0e8;border-radius:8px;color:#333;font-size:12px;outline:none;cursor:pointer;font-weight:500}
+select:focus{border-color:#4361ee}
+
+/* Search */
+.search{padding:9px 16px;background:#f8f9fc;border:1.5px solid #e0e0e8;border-radius:10px;color:#333;font-size:14px;outline:none;width:280px}
+.search:focus{border-color:#4361ee;background:#fff}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:28px;max-width:460px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
+.modal h3{color:#1a1a2e;margin-bottom:20px;font-size:18px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.field input,.field select{width:100%;padding:10px 14px;background:#f8f9fc;border:1.5px solid #e0e0e8;border-radius:10px;color:#333;font-size:14px;outline:none}
+.field input:focus,.field select:focus{border-color:#4361ee;background:#fff}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px}
+</style>
+</head>
+<body>
+
+<div class="login-wrap" id="loginView">
+  <div class="login-card">
+    <h1>Admin Panel</h1>
+    <p>Custom Dialer Management</p>
+    <div class="err-msg" id="loginError" style="display:none"></div>
+    <input type="password" id="adminPassword" placeholder="Enter admin password" autofocus>
+    <button onclick="adminLogin()">Sign In</button>
+  </div>
+</div>
+
+<div class="app" id="appView" style="display:none;flex-direction:row">
+  <div class="sidebar">
+    <div class="logo">Custom <span>Dialer</span></div>
+    <nav>
+      <a href="#" data-page="dashboard" class="active" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard</a>
+      <a href="#" data-page="customers" onclick="showPage('customers')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Customers</a>
+      <a href="#" data-page="minutes" onclick="showPage('minutes')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Minutes</a>
+      <a href="#" data-page="numbers" onclick="showPage('numbers')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+        Numbers</a>
+    </nav>
+    <div class="bottom">
+      <button class="btn btn-outline" style="width:100%" onclick="adminLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="topbar">
+      <h2 id="pageTitle">Dashboard</h2>
+      <button class="btn btn-outline" onclick="loadData()">Refresh</button>
+    </div>
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page page-section active" id="page-dashboard">
+      <div class="stats-row">
+        <div class="stat"><div class="label">Total Customers</div><div class="val" id="statTotal">-</div></div>
+        <div class="stat green"><div class="label">Active</div><div class="val" id="statActive">-</div></div>
+        <div class="stat red"><div class="label">Suspended</div><div class="val" id="statSuspended">-</div></div>
+        <div class="stat blue"><div class="label">New This Week</div><div class="val" id="statNew">-</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Recent Customers</h3></div>
+        <table><thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Package</th><th>Registered</th></tr></thead>
+        <tbody id="recentCustomersBody"><tr><td colspan="5" class="empty-row">Loading...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS PAGE -->
+    <div class="page page-section" id="page-customers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <input type="text" class="search" id="searchInput" placeholder="Search customers..." oninput="debounceSearch()">
+      </div>
+      <div class="card">
+        <table><thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Status</th><th>Package</th><th>Registered</th><th>Actions</th></tr></thead>
+        <tbody id="customersBody"><tr><td colspan="7" class="empty-row">Loading...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- MINUTES PAGE -->
+    <div class="page page-section" id="page-minutes">
+      <div class="card">
+        <div class="card-header"><h3>Minute Assignments</h3></div>
+        <table><thead><tr><th>Customer</th><th>Minutes</th><th>Used</th><th>Remaining</th><th>Price Paid</th><th>Date</th><th>Notes</th></tr></thead>
+        <tbody id="minutesBody"><tr><td colspan="7" class="empty-row">No assignments</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- NUMBERS PAGE -->
+    <div class="page page-section" id="page-numbers">
+      <div class="card">
+        <div class="card-header"><h3>Number Assignments</h3></div>
+        <table><thead><tr><th>Customer</th><th>Phone Number</th><th>Type</th><th>Monthly</th><th>Status</th><th>Twilio</th><th>Date</th><th>Actions</th></tr></thead>
+        <tbody id="numbersBody"><tr><td colspan="7" class="empty-row">No assignments</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Minutes Modal -->
+<div class="modal-bg" id="minutesModal">
+  <div class="modal">
+    <h3>Assign Minutes</h3>
+    <div id="minutesCustomerInfo" style="color:#888;font-size:13px;margin-bottom:16px"></div>
+    <div class="field"><label>Package</label>
+      <select id="assignPackageId">
+        <option value="">Custom amount</option>
+        <option value="min_50">50 min — $2.00</option>
+        <option value="min_150">150 min — $5.00</option>
+        <option value="min_500">500 min — $12.00</option>
+        <option value="min_1500">1,500 min — $30.00</option>
+        <option value="min_5000">5,000 min — $80.00</option>
+      </select></div>
+    <div class="field"><label>Minutes</label><input type="number" id="assignMinutes" placeholder="500"></div>
+    <div class="field"><label>Price Paid ($)</label><input type="number" id="assignPrice" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Notes</label><input type="text" id="assignMinutesNotes" placeholder="Optional"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('minutesModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitMinutes()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Number Modal -->
+<div class="modal-bg" id="numberModal">
+  <div class="modal">
+    <h3>Assign Phone Number</h3>
+    <div id="numberCustomerInfo" style="color:#888;font-size:13px;margin-bottom:16px"></div>
+    <div class="field"><label>Phone Number</label><input type="text" id="assignPhone" placeholder="+1xxxxxxxxxx"></div>
+    <div class="field"><label>Friendly Name</label><input type="text" id="assignFriendlyName" placeholder="(555) 123-4567"></div>
+    <div class="field"><label>Type</label><select id="assignNumberType"><option value="local">Local</option><option value="tollfree">Toll-Free</option></select></div>
+    <div class="field"><label>Monthly Price ($)</label><input type="number" id="assignMonthly" step="0.01" placeholder="2.15"></div>
+    <div class="field"><label>Notes</label><input type="text" id="assignNumberNotes" placeholder="Optional"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('numberModal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitNumber()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API='/api/admin';
+let token=localStorage.getItem('admin_token'),searchTimer=null,currentCustomerId=null;
+
+if(token){showApp();loadData()}
+document.getElementById('adminPassword').addEventListener('keydown',e=>{if(e.key==='Enter')adminLogin()});
+document.getElementById('assignPackageId').addEventListener('change',function(){
+  const m={min_50:[50,2],min_150:[150,5],min_500:[500,12],min_1500:[1500,30],min_5000:[5000,80]};
+  const v=m[this.value];if(v){document.getElementById('assignMinutes').value=v[0];document.getElementById('assignPrice').value=v[1]}
+});
+
+async function adminLogin(){
+  const pw=document.getElementById('adminPassword').value,err=document.getElementById('loginError');
+  err.style.display='none';
+  try{const r=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  const d=await r.json();if(!r.ok){err.textContent=d.error||'Failed';err.style.display='block';return}
+  token=d.token;localStorage.setItem('admin_token',token);showApp();loadData()}catch(e){err.textContent='Connection failed';err.style.display='block'}
+}
+function adminLogout(){token=null;localStorage.removeItem('admin_token');document.getElementById('loginView').style.display='flex';document.getElementById('appView').style.display='none'}
+function showApp(){document.getElementById('loginView').style.display='none';document.getElementById('appView').style.display='flex'}
+
+function showPage(name){
+  document.querySelectorAll('.page-section').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.sidebar nav a').forEach(a=>{a.classList.toggle('active',a.dataset.page===name)});
+  const titles={dashboard:'Dashboard',customers:'Customers',minutes:'Minute Assignments',numbers:'Number Assignments'};
+  document.getElementById('pageTitle').textContent=titles[name]||name;
+  return false;
+}
+
+async function apiFetch(u){const r=await fetch(u,{headers:{Authorization:'Bearer '+token}});if(r.status===401||r.status===403){adminLogout();return null}return r.json()}
+async function apiPost(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(b)});if(r.status===401||r.status===403){adminLogout();return null}return r.json()}
+async function apiPatch(u,b){const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(b)});if(r.status===401||r.status===403){adminLogout();return null}return r.json()}
+async function apiDelete(u){const r=await fetch(u,{method:'DELETE',headers:{Authorization:'Bearer '+token}});if(r.status===401||r.status===403){adminLogout();return null}return r.json()}
+
+async function loadData(){
+  const s=document.getElementById('searchInput').value||'';
+  const sp=s?'&search='+encodeURIComponent(s):'';
+  const[stats,custs,recent]=await Promise.all([apiFetch(API+'/stats'),apiFetch(API+'/customers?limit=100'+sp),apiFetch(API+'/recent-assignments')]);
+  if(stats){document.getElementById('statTotal').textContent=stats.total||0;document.getElementById('statActive').textContent=stats.active||0;document.getElementById('statSuspended').textContent=stats.suspended||0;document.getElementById('statNew').textContent=stats.new_this_week||0}
+  if(custs?.customers){renderCustomers(custs.customers);renderRecentCustomers(custs.customers.slice(0,5))}
+  if(recent){renderMinutes(recent.recentMinutes||[]);renderNumbers(recent.recentNumbers||[])}
+}
+
+function renderRecentCustomers(list){
+  const t=document.getElementById('recentCustomersBody');
+  if(!list.length){t.innerHTML='<tr><td colspan="5" class="empty-row">No customers yet</td></tr>';return}
+  t.innerHTML=list.map(c=>`<tr><td>${esc(c.email)}</td><td>${esc(c.name||'-')}</td><td><span class="tag tag-${c.status==='active'?'green':'red'}">${c.status}</span></td><td><span class="tag tag-${({free:'gray',basic:'blue',silver:'gray',premium:'gold'})[c.package]||'gray'}">${c.package}</span></td><td>${new Date(c.created_at).toLocaleDateString()}</td></tr>`).join('')
+}
+
+function renderCustomers(list){
+  const t=document.getElementById('customersBody');
+  if(!list.length){t.innerHTML='<tr><td colspan="7" class="empty-row">No customers</td></tr>';return}
+  t.innerHTML=list.map(c=>`<tr>
+    <td style="color:#888">${c.id}</td><td><strong>${esc(c.email)}</strong></td><td>${esc(c.name||'-')}</td>
+    <td><select onchange="updateStatus(${c.id},this.value)"><option value="active" ${c.status==='active'?'selected':''}>Active</option><option value="suspended" ${c.status==='suspended'?'selected':''}>Suspended</option></select></td>
+    <td><select onchange="updatePackage(${c.id},this.value)"><option value="free" ${c.package==='free'?'selected':''}>Free</option><option value="basic" ${c.package==='basic'?'selected':''}>Basic</option><option value="silver" ${c.package==='silver'?'selected':''}>Silver</option><option value="premium" ${c.package==='premium'?'selected':''}>Premium</option></select></td>
+    <td style="color:#888">${new Date(c.created_at).toLocaleDateString()}</td>
+    <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" onclick="openMinutesModal(${c.id},'${esc(c.email)}')">+ Minutes</button> <button class="btn btn-success btn-sm" onclick="openNumberModal(${c.id},'${esc(c.email)}')">+ Number</button> <button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id})">Delete</button></td>
+  </tr>`).join('')
+}
+
+function renderMinutes(list){
+  const t=document.getElementById('minutesBody');
+  if(!list.length){t.innerHTML='<tr><td colspan="7" class="empty-row">No minute assignments yet</td></tr>';return}
+  t.innerHTML=list.map(m=>`<tr><td>${esc(m.customer_name||m.email)}</td><td><strong>${m.minutes_total}</strong></td><td>${m.minutes_used||0}</td><td><span class="tag tag-green">${m.minutes_total-(m.minutes_used||0)}</span></td><td>$${Number(m.price_paid).toFixed(2)}</td><td style="color:#888">${new Date(m.assigned_at).toLocaleDateString()}</td><td style="color:#888">${esc(m.notes||'-')}</td></tr>`).join('')
+}
+
+function renderNumbers(list){
+  const t=document.getElementById('numbersBody');
+  if(!list.length){t.innerHTML='<tr><td colspan="8" class="empty-row">No number assignments yet</td></tr>';return}
+  t.innerHTML=list.map(n=>{
+    const isActivated = n.activated;
+    const statusTag = {active:'tag-green',suspended:'tag-blue',revoked:'tag-red'}[n.status]||'tag-gray';
+    let actions = '';
+    if(n.status==='active'){
+      actions = (isActivated
+        ? '<span style="color:#00c853;font-weight:600;font-size:12px">Live</span> '
+        : `<button class="btn btn-primary btn-sm" onclick="activateNumber(${n.customer_id},'${esc(n.phone_number)}')">Activate</button> `)
+        + `<button class="btn btn-outline btn-sm" onclick="suspendNumber(${n.id})">Suspend</button> `
+        + `<button class="btn btn-danger btn-sm" onclick="revokeNumber(${n.id})">Revoke</button>`;
+    } else if(n.status==='suspended'){
+      actions = `<button class="btn btn-success btn-sm" onclick="reactivateNumber(${n.id})">Reactivate</button> `
+        + `<button class="btn btn-danger btn-sm" onclick="revokeNumber(${n.id})">Revoke</button>`;
+    } else {
+      actions = '<span style="color:#888;font-size:12px">Permanently revoked</span>';
+    }
+    return `<tr>
+      <td>${esc(n.customer_name||n.email)}</td>
+      <td><strong>${esc(n.phone_number)}</strong></td>
+      <td>${n.type==='tollfree'?'Toll-Free':'Local'}</td>
+      <td>$${Number(n.monthly_price).toFixed(2)}/mo</td>
+      <td><span class="tag ${statusTag}">${n.status}</span></td>
+      <td>${isActivated&&n.status==='active'?'<span class="tag tag-green">Activated</span>':n.status==='suspended'?'<span class="tag tag-blue">Paused</span>':'<span class="tag tag-gray">Pending</span>'}</td>
+      <td style="color:#888">${new Date(n.assigned_at).toLocaleDateString()}</td>
+      <td style="white-space:nowrap">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function activateNumber(customerId, phoneNumber) {
+  if(!confirm('Activate this number for the customer?\n\nMake sure you have already:\n1. Purchased this number in Twilio Console\n2. Set the TwiML App webhook on it'))return;
+  const r = await apiPost(API+'/customers/'+customerId+'/activate-number', {phoneNumber});
+  if(r && r.agent) { alert('Number activated! Customer can now make calls.\nTwilio Identity: '+r.agent.twilio_identity); loadData(); }
+  else alert('Failed: '+(r?.error||'Unknown error'));
+}
+async function suspendNumber(id){
+  if(!confirm('Suspend this number? The customer cannot make calls with it until you reactivate.'))return;
+  await apiPatch(API+'/numbers/'+id+'/suspend',{});loadData();
+}
+async function reactivateNumber(id){
+  await apiPatch(API+'/numbers/'+id+'/reactivate',{});loadData();
+}
+
+function openMinutesModal(id,email){currentCustomerId=id;document.getElementById('minutesCustomerInfo').textContent='Customer: '+email;['assignMinutes','assignPrice','assignMinutesNotes'].forEach(i=>document.getElementById(i).value='');document.getElementById('assignPackageId').value='';document.getElementById('minutesModal').classList.add('open')}
+function openNumberModal(id,email){currentCustomerId=id;document.getElementById('numberCustomerInfo').textContent='Customer: '+email;['assignPhone','assignFriendlyName','assignMonthly','assignNumberNotes'].forEach(i=>document.getElementById(i).value='');document.getElementById('assignNumberType').value='local';document.getElementById('numberModal').classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+
+async function submitMinutes(){const m=parseInt(document.getElementById('assignMinutes').value);if(!m||m<=0)return alert('Enter valid minutes');await apiPost(API+'/customers/'+currentCustomerId+'/minutes',{minutes:m,packageId:document.getElementById('assignPackageId').value||null,pricePaid:parseFloat(document.getElementById('assignPrice').value)||0,notes:document.getElementById('assignMinutesNotes').value||null});closeModal('minutesModal');loadData()}
+async function submitNumber(){const p=document.getElementById('assignPhone').value.trim();if(!p)return alert('Enter a phone number');await apiPost(API+'/customers/'+currentCustomerId+'/numbers',{phoneNumber:p,friendlyName:document.getElementById('assignFriendlyName').value||null,type:document.getElementById('assignNumberType').value,monthlyPrice:parseFloat(document.getElementById('assignMonthly').value)||0,notes:document.getElementById('assignNumberNotes').value||null});closeModal('numberModal');loadData()}
+async function revokeNumber(id){if(!confirm('Revoke this number?'))return;await apiPatch(API+'/numbers/'+id+'/revoke',{});loadData()}
+async function updateStatus(id,s){await apiPatch(API+'/customers/'+id+'/status',{status:s});loadData()}
+async function updatePackage(id,p){await apiPatch(API+'/customers/'+id+'/package',{package:p});loadData()}
+async function deleteCustomer(id){if(!confirm('Delete this customer?'))return;await apiDelete(API+'/customers/'+id);loadData()}
+function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(loadData,300)}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+</script>
+</body>
+</html>
