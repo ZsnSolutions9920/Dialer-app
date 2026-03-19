@@ -315,14 +315,6 @@ data class SetupCardResponse(
     val url: String?
 )
 
-data class ChargeRequest(
-    val type: String,
-    val itemId: String?,
-    val itemLabel: String?,
-    val amount: Double?,
-    val metadata: Map<String, Any?>?
-)
-
 // Calling Status
 data class CallingStatus(
     val hasNumber: Boolean?,
@@ -331,7 +323,34 @@ data class CallingStatus(
     val minutesTotal: Int?,
     val minutesUsed: Int?,
     val minutesRemaining: Int?,
-    val canMakeCalls: Boolean?
+    val canMakeCalls: Boolean?,
+    @SerializedName("package") val pkg: String?
+)
+
+// Subscription Packages
+data class SubPackage(
+    val id: String,
+    val name: String,
+    val price: Double,
+    val period: String?,
+    val features: List<String>,
+    val lockedFeatures: List<String>,
+    val description: String?,
+    val popular: Boolean?,
+    val color: String?
+)
+
+data class PackagesResponse(
+    val packages: List<SubPackage>
+)
+
+data class BuyPackageRequest(
+    val packageId: String
+)
+
+data class BuyPackageResponse(
+    @SerializedName("package") val pkg: String?,
+    val message: String?
 )
 
 data class CustomerTwilioToken(
@@ -341,7 +360,7 @@ data class CustomerTwilioToken(
 )
 
 // Purchases
-data class MockPurchaseRequest(
+data class BuyRequest(
     val type: String,
     val itemId: String?,
     val itemLabel: String?,
@@ -349,9 +368,11 @@ data class MockPurchaseRequest(
     val metadata: Map<String, Any?>?
 )
 
-data class MockPurchaseResponse(
-    val purchase: Purchase?,
-    val message: String?
+data class BuyResponse(
+    val success: Boolean?,
+    val message: String?,
+    val checkoutUrl: String?,
+    val purchaseId: Int?
 )
 
 data class Purchase(
@@ -386,6 +407,19 @@ data class MyNumber(
     @SerializedName("monthly_price") val monthlyPrice: Double?,
     val status: String?,
     @SerializedName("assigned_at") val assignedAt: String?
+)
+
+// KYC
+data class KycStatusResponse(
+    val status: String,  // "none", "pending", "approved", "rejected"
+    val message: String?,
+    val rejectionReason: String?
+)
+
+data class KycSubmitResponse(
+    val success: Boolean?,
+    val message: String?,
+    val status: String?
 )
 
 // Active Calls

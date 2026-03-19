@@ -243,7 +243,8 @@ fun DashboardScreen(
                             )
                             Text(
                                 when {
-                                    callingStatus?.hasNumber != true -> "Purchase a phone number to start calling"
+                                    callingStatus?.pkg == "free" || callingStatus?.pkg == null -> "Choose a plan to unlock calling features"
+                                    callingStatus.hasNumber != true -> "Purchase a phone number to start calling"
                                     minutesRemaining <= 0 -> "Buy minutes to make your first call"
                                     else -> "Complete your setup"
                                 },
@@ -257,7 +258,10 @@ fun DashboardScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Text("Store", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text(
+                                if (callingStatus?.pkg == "free" || callingStatus?.pkg == null) "Plans" else "Store",
+                                fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                            )
                         }
                     }
                 }

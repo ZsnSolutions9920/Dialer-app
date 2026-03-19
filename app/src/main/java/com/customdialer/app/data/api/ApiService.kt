@@ -1,6 +1,8 @@
 package com.customdialer.app.data.api
 
 import com.customdialer.app.data.model.*
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -28,6 +30,18 @@ interface ApiService {
 
     @GET("api/customer/me")
     suspend fun getCustomerProfile(): Response<CustomerProfile>
+
+    // KYC
+    @GET("api/customer/kyc-status")
+    suspend fun getKycStatus(): Response<KycStatusResponse>
+
+    @Multipart
+    @POST("api/customer/kyc")
+    suspend fun submitKyc(
+        @Part("fullName") fullName: RequestBody,
+        @Part cnicImage: MultipartBody.Part,
+        @Part selfieImage: MultipartBody.Part
+    ): Response<KycSubmitResponse>
 
     // Agents
     @GET("api/agents")
@@ -159,6 +173,9 @@ interface ApiService {
     @GET("api/store/minutes-packages")
     suspend fun getMinutesPackages(): Response<MinutesPackagesResponse>
 
+    @GET("api/store/packages")
+    suspend fun getSubscriptionPackages(): Response<PackagesResponse>
+
     // Select Number
     @POST("api/purchase/select-number")
     suspend fun selectNumber(@Body request: SelectNumberRequest): Response<SelectNumberResponse>
@@ -170,8 +187,6 @@ interface ApiService {
     @POST("api/purchase/setup-card")
     suspend fun setupCard(): Response<SetupCardResponse>
 
-    @POST("api/purchase/charge")
-    suspend fun chargeCard(@Body request: ChargeRequest): Response<MockPurchaseResponse>
 
     // Customer call history
     @GET("api/purchase/my-calls")
@@ -188,8 +203,8 @@ interface ApiService {
     suspend fun getCustomerTwilioToken(): Response<CustomerTwilioToken>
 
     // Purchases
-    @POST("api/purchase/mock")
-    suspend fun mockPurchase(@Body request: MockPurchaseRequest): Response<MockPurchaseResponse>
+    @POST("api/purchase/buy")
+    suspend fun buy(@Body request: BuyRequest): Response<BuyResponse>
 
     @GET("api/purchase/history")
     suspend fun getPurchaseHistory(): Response<PurchaseHistoryResponse>

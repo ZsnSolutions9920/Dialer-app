@@ -87,6 +87,9 @@ dependencies {
     // Twilio Voice SDK
     implementation("com.twilio:voice-android:6.4.1")
 
+    // Coil (image loading for KYC previews)
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // Accompanist (system UI controller)
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.32.0")
 

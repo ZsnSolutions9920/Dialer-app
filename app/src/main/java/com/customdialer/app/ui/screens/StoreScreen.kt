@@ -34,9 +34,6 @@ fun StoreScreen(
     packagesLoading: Boolean,
     onBuyPackage: (MinutesPackage) -> Unit,
     onBuyNumber: (AvailableNumber) -> Unit,
-    onMockBuyPackage: (MinutesPackage) -> Unit,
-    onMockBuyNumber: (AvailableNumber) -> Unit,
-    hasCard: Boolean,
     purchaseMessage: String?
 ) {
     val C = AppColors
@@ -52,23 +49,12 @@ fun StoreScreen(
         AlertDialog(
             onDismissRequest = { confirmMinutes = null },
             title = { Text("Confirm Purchase", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("Buy ${confirmMinutes!!.minutes} minutes for $${String.format("%.2f", confirmMinutes!!.price)}?")
-                    if (!hasCard) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No card on file. This will be a test purchase.", fontSize = 12.sp, color = C.textMuted)
-                    }
-                }
-            },
+            text = { Text("Buy ${confirmMinutes!!.minutes} minutes for $${String.format("%.2f", confirmMinutes!!.price)}?") },
             confirmButton = {
                 Button(
-                    onClick = {
-                        if (hasCard) onBuyPackage(confirmMinutes!!) else onMockBuyPackage(confirmMinutes!!)
-                        confirmMinutes = null
-                    },
+                    onClick = { onBuyPackage(confirmMinutes!!); confirmMinutes = null },
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                ) { Text(if (hasCard) "Pay Now" else "Test Purchase") }
+                ) { Text("Pay Now") }
             },
             dismissButton = {
                 TextButton(onClick = { confirmMinutes = null }) { Text("Cancel") }
@@ -81,23 +67,12 @@ fun StoreScreen(
         AlertDialog(
             onDismissRequest = { confirmNumber = null },
             title = { Text("Confirm Purchase", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("Buy ${confirmNumber!!.phoneNumber} for $${String.format("%.2f", confirmNumber!!.monthlyPrice ?: 0.0)}/month?")
-                    if (!hasCard) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No card on file. This will be a test purchase.", fontSize = 12.sp, color = C.textMuted)
-                    }
-                }
-            },
+            text = { Text("Buy ${confirmNumber!!.phoneNumber} for $${String.format("%.2f", confirmNumber!!.monthlyPrice ?: 0.0)}/month?") },
             confirmButton = {
                 Button(
-                    onClick = {
-                        if (hasCard) onBuyNumber(confirmNumber!!) else onMockBuyNumber(confirmNumber!!)
-                        confirmNumber = null
-                    },
+                    onClick = { onBuyNumber(confirmNumber!!); confirmNumber = null },
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                ) { Text(if (hasCard) "Pay Now" else "Test Purchase") }
+                ) { Text("Pay Now") }
             },
             dismissButton = {
                 TextButton(onClick = { confirmNumber = null }) { Text("Cancel") }

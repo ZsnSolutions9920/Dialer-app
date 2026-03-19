@@ -1,6 +1,7 @@
 package com.customdialer.app.ui
 
 import android.app.Application
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,9 @@ import com.customdialer.app.util.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -29,6 +33,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError
+
+    // KYC state
+    private val _kycStatus = MutableStateFlow("checking") // "checking", "none", "pending", "approved", "rejected"
+    val kycStatus: StateFlow<String> = _kycStatus
+
+    private val _kycMessage = MutableStateFlow<String?>(null)
+    val kycMessage: StateFlow<String?> = _kycMessage
+
+    private val _kycLoading = MutableStateFlow(false)
+    val kycLoading: StateFlow<Boolean> = _kycLoading
+
+    private val _kycError = MutableStateFlow<String?>(null)
+    val kycError: StateFlow<String?> = _kycError
 
     // Agent
     private val _agent = MutableStateFlow<Agent?>(null)
@@ -138,6 +155,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _emailFolder = MutableStateFlow<String?>(null)
     val emailFolder: StateFlow<String?> = _emailFolder
 
+    // Customer package
+    private val _customerPackage = MutableStateFlow("free")
+    val customerPackage: StateFlow<String> = _customerPackage
+
+    private val _subPackages = MutableStateFlow<List<SubPackage>>(emptyList())
+    val subPackages: StateFlow<List<SubPackage>> = _subPackages
+
     // Payment method
     private val _paymentMethod = MutableStateFlow<PaymentMethodInfo?>(null)
     val paymentMethod: StateFlow<PaymentMethodInfo?> = _paymentMethod
@@ -171,6 +195,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedNumberType = MutableStateFlow("local")
     val selectedNumberType: StateFlow<String> = _selectedNumberType
+
+    // Purchase success (deep link return from Stripe)
+    private val _showPurchaseSuccess = MutableStateFlow(false)
+    val showPurchaseSuccess: StateFlow<Boolean> = _showPurchaseSuccess
+
+    fun handlePurchaseSuccess() {
+        _showPurchaseSuccess.value = true
+        // Refresh all purchase-related data
+        refreshAfterPurchase()
+    }
+
+    fun dismissPurchaseSuccess() {
+        _showPurchaseSuccess.value = false
+    }
+
+    fun refreshAfterPurchase() {
+        loadCallingStatus()
+        loadMyAccount()
+        loadPaymentMethod()
+        loadProfile()
+    }
 
     // Store — Minutes
     private val _minutesPackages = MutableStateFlow<List<MinutesPackage>>(emptyList())
@@ -263,6 +308,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (tokenManager.isLoggedIn()) {
             loadProfile()
             loadCallingStatus()
+            checkKycStatus()
         }
     }
 
@@ -380,9 +426,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val resp = RetrofitClient.getApi().getCallingStatus()
                 if (resp.isSuccessful) {
-                    _callingStatus.value = resp.body()
+                    val status = resp.body()
+                    _callingStatus.value = status
+                    _customerPackage.value = status?.pkg ?: "free"
                     // Auto-fetch Twilio token if customer has a number
-                    if (resp.body()?.hasNumber == true) {
+                    if (status?.hasNumber == true) {
                         fetchTwilioToken()
                         connectSocket()
                     }
@@ -454,6 +502,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     tokenManager.saveRefreshToken(body.refreshToken)
                     tokenManager.saveCustomerInfo(body.customer.id, body.customer.email, body.customer.name)
                     _isLoggedIn.value = true
+                    checkKycStatus()
                     loadDashboard()
                     loadCallingStatus()
                 } else {
@@ -484,6 +533,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     tokenManager.saveRefreshToken(body.refreshToken)
                     tokenManager.saveCustomerInfo(body.customer.id, body.customer.email, body.customer.name)
                     _isLoggedIn.value = true
+                    checkKycStatus()
                     loadDashboard()
                     loadCallingStatus()
                 } else {
@@ -524,6 +574,78 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _agent.value = response.body()
                 }
             } catch (_: Exception) { }
+        }
+    }
+
+    // === KYC ===
+    fun checkKycStatus() {
+        viewModelScope.launch {
+            _kycStatus.value = "checking"
+            try {
+                val resp = RetrofitClient.getApi().getKycStatus()
+                if (resp.isSuccessful) {
+                    val body = resp.body()!!
+                    _kycStatus.value = body.status
+                    _kycMessage.value = body.rejectionReason ?: body.message
+                } else {
+                    // If endpoint doesn't exist yet (404), treat as approved (backwards compat)
+                    if (resp.code() == 404) {
+                        _kycStatus.value = "approved"
+                    } else {
+                        _kycStatus.value = "approved"
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "KYC status check failed: ${e.message}")
+                // On network error, default to approved so existing users aren't blocked
+                _kycStatus.value = "approved"
+            }
+        }
+    }
+
+    fun submitKyc(fullName: String, cnicUri: Uri, selfieUri: Uri) {
+        viewModelScope.launch {
+            _kycLoading.value = true
+            _kycError.value = null
+            try {
+                val context = getApplication<Application>()
+                val contentResolver = context.contentResolver
+
+                // Read CNIC image bytes
+                val cnicBytes = contentResolver.openInputStream(cnicUri)?.use { it.readBytes() }
+                    ?: throw Exception("Cannot read CNIC image")
+                val cnicType = contentResolver.getType(cnicUri) ?: "image/jpeg"
+                val cnicBody = cnicBytes.toRequestBody(cnicType.toMediaTypeOrNull())
+                val cnicPart = MultipartBody.Part.createFormData("cnicImage", "cnic.jpg", cnicBody)
+
+                // Read selfie image bytes
+                val selfieBytes = contentResolver.openInputStream(selfieUri)?.use { it.readBytes() }
+                    ?: throw Exception("Cannot read selfie image")
+                val selfieType = contentResolver.getType(selfieUri) ?: "image/jpeg"
+                val selfieBody = selfieBytes.toRequestBody(selfieType.toMediaTypeOrNull())
+                val selfiePart = MultipartBody.Part.createFormData("selfieImage", "selfie.jpg", selfieBody)
+
+                // Full name as text part
+                val namePart = fullName.toRequestBody("text/plain".toMediaTypeOrNull())
+
+                val resp = RetrofitClient.getApi().submitKyc(namePart, cnicPart, selfiePart)
+                if (resp.isSuccessful) {
+                    _kycStatus.value = "pending"
+                    _kycMessage.value = null
+                    _kycError.value = null
+                } else {
+                    val errBody = resp.errorBody()?.string()
+                    _kycError.value = when (resp.code()) {
+                        400 -> "Please fill all fields and upload both images"
+                        413 -> "Images are too large. Please use smaller images"
+                        else -> errBody?.take(100) ?: "Submission failed"
+                    }
+                }
+            } catch (e: Exception) {
+                _kycError.value = "Error: ${e.message?.take(60)}"
+            } finally {
+                _kycLoading.value = false
+            }
         }
     }
 
@@ -792,6 +914,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadAvailableNumbers(_selectedNumberType.value)
     }
 
+    fun loadSubPackages() {
+        viewModelScope.launch {
+            try {
+                val resp = RetrofitClient.getApi().getSubscriptionPackages()
+                if (resp.isSuccessful) _subPackages.value = resp.body()?.packages ?: emptyList()
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun buyPackage(packageId: String) {
+        val prices = mapOf("basic" to 9.99, "silver" to 19.99, "premium" to 39.99)
+        val names = mapOf("basic" to "Basic", "silver" to "Silver", "premium" to "Premium")
+        purchase("package", packageId, "${names[packageId]} Package", prices[packageId], mapOf("packageId" to packageId))
+    }
+
     fun loadCustomerCalls() {
         viewModelScope.launch {
             try {
@@ -834,21 +971,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearSetupCardUrl() { _setupCardUrl.value = null }
 
-    fun purchaseWithCard(type: String, itemId: String?, itemLabel: String?, amount: Double?, metadata: Map<String, Any?>?) {
+    // Unified purchase — handles card charge or opens checkout URL
+    private val _checkoutUrl = MutableStateFlow<String?>(null)
+    val checkoutUrl: StateFlow<String?> = _checkoutUrl
+
+    fun clearCheckoutUrl() { _checkoutUrl.value = null }
+
+    fun purchase(type: String, itemId: String?, itemLabel: String?, amount: Double?, metadata: Map<String, Any?>?) {
         viewModelScope.launch {
             try {
-                val resp = RetrofitClient.getApi().chargeCard(ChargeRequest(type, itemId, itemLabel, amount, metadata))
+                val resp = RetrofitClient.getApi().buy(BuyRequest(type, itemId, itemLabel, amount, metadata))
                 if (resp.isSuccessful) {
-                    _purchaseMessage.value = resp.body()?.message ?: "Purchase successful!"
-                    loadMyAccount()
-                    loadPaymentMethod()
+                    val body = resp.body()!!
+                    if (body.success == true) {
+                        _purchaseMessage.value = body.message ?: "Purchase successful!"
+                        loadMyAccount()
+                        loadCallingStatus()
+                        loadPaymentMethod()
+                    } else if (body.checkoutUrl != null) {
+                        // No saved card — open Stripe Checkout in browser
+                        _checkoutUrl.value = body.checkoutUrl
+                    }
                 } else {
                     val code = resp.code()
                     val err = resp.errorBody()?.string()
                     _purchaseMessage.value = when {
-                        code == 402 -> "Card declined"
-                        code == 400 && err?.contains("No card") == true -> "Please add a card first"
-                        code == 503 -> "Payment not available yet. Use mock purchase."
+                        code == 402 -> "Card declined. Please update your card."
+                        code == 503 -> "Payment system unavailable"
                         else -> "Purchase failed"
                     }
                 }
@@ -860,58 +1009,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun mockPurchaseMinutes(pkg: MinutesPackage) {
-        viewModelScope.launch {
-            try {
-                val resp = RetrofitClient.getApi().mockPurchase(MockPurchaseRequest(
-                    type = "minutes",
-                    itemId = pkg.id,
-                    itemLabel = "${pkg.minutes} Minutes",
-                    amount = pkg.price,
-                    metadata = mapOf("minutes" to pkg.minutes)
-                ))
-                if (resp.isSuccessful) {
-                    _purchaseMessage.value = "Purchased ${pkg.minutes} minutes!"
-                    loadMyAccount()
-                } else {
-                    _purchaseMessage.value = "Purchase failed"
-                }
-            } catch (e: Exception) {
-                _purchaseMessage.value = "Error: ${e.message?.take(40)}"
-            }
-            // Auto-clear message
-            kotlinx.coroutines.delay(3000)
-            _purchaseMessage.value = null
-        }
+    fun purchaseMinutes(pkg: MinutesPackage) {
+        purchase("minutes", pkg.id, "${pkg.minutes} Minutes", pkg.price, mapOf("minutes" to pkg.minutes))
     }
 
-    fun mockPurchaseNumber(number: AvailableNumber) {
-        viewModelScope.launch {
-            try {
-                val resp = RetrofitClient.getApi().mockPurchase(MockPurchaseRequest(
-                    type = "number",
-                    itemId = number.phoneNumber,
-                    itemLabel = number.phoneNumber ?: "Phone Number",
-                    amount = number.monthlyPrice,
-                    metadata = mapOf(
-                        "phoneNumber" to number.phoneNumber,
-                        "friendlyName" to number.friendlyName,
-                        "numberType" to number.type,
-                        "monthlyPrice" to number.monthlyPrice
-                    )
-                ))
-                if (resp.isSuccessful) {
-                    _purchaseMessage.value = "Purchased ${number.phoneNumber}!"
-                    loadMyAccount()
-                } else {
-                    _purchaseMessage.value = "Purchase failed"
-                }
-            } catch (e: Exception) {
-                _purchaseMessage.value = "Error: ${e.message?.take(40)}"
-            }
-            kotlinx.coroutines.delay(3000)
-            _purchaseMessage.value = null
-        }
+    fun purchaseNumber(number: AvailableNumber) {
+        purchase("number", number.phoneNumber, number.phoneNumber ?: "Phone Number", number.monthlyPrice,
+            mapOf("phoneNumber" to number.phoneNumber, "friendlyName" to number.friendlyName,
+                  "numberType" to number.type, "monthlyPrice" to number.monthlyPrice))
     }
 
     fun loadMyAccount() {

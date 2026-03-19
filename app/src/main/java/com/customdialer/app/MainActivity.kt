@@ -1,11 +1,13 @@
 package com.customdialer.app
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,12 +39,39 @@ import com.customdialer.app.ui.theme.*
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var mainViewModel: MainViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
+        handleDeepLink(intent)
         setContent {
             CustomDialerTheme {
-                MainApp()
+                MainApp(viewModel = mainViewModel)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Refresh data when returning from browser (Stripe checkout)
+        if (mainViewModel.isLoggedIn.value) {
+            mainViewModel.refreshAfterPurchase()
+        }
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        val path = uri.path ?: ""
+        val host = uri.host ?: ""
+        if (path == "/success-purchase" || host == "purchase-success") {
+            mainViewModel.handlePurchaseSuccess()
         }
     }
 }
@@ -106,6 +135,61 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    // Package gating
+    val custPackage by viewModel.customerPackage.collectAsStateWithLifecycle()
+
+    // Which screens are unlocked per package
+    fun isScreenUnlocked(route: String): Boolean {
+        if (route in listOf(Screen.Dashboard.route, Screen.Pricing.route, Screen.Store.route, Screen.Profile.route, Screen.Settings.route)) return true
+        return when (custPackage) {
+            "basic" -> route in listOf(Screen.Dialer.route, Screen.CallHistory.route)
+            "silver" -> route in listOf(Screen.Dialer.route, Screen.CallHistory.route, Screen.Contacts.route)
+            "premium" -> true
+            else -> false // "free" — nothing unlocked except dashboard/store/profile
+        }
+    }
+
+    // Purchase success deep link state
+    val showPurchaseSuccess by viewModel.showPurchaseSuccess.collectAsStateWithLifecycle()
+
+    LaunchedEffect(showPurchaseSuccess) {
+        if (showPurchaseSuccess && isLoggedIn) {
+            navController.navigate(Screen.PurchaseSuccess.route) {
+                popUpTo(Screen.Dashboard.route) { saveState = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    // Global checkout URL handler — opens Stripe in browser from any screen
+    val globalCheckoutUrl by viewModel.checkoutUrl.collectAsStateWithLifecycle()
+    val globalSetupCardUrl by viewModel.setupCardUrl.collectAsStateWithLifecycle()
+    val globalContext = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(globalCheckoutUrl) {
+        if (globalCheckoutUrl != null) {
+            try {
+                globalContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(globalCheckoutUrl)))
+            } catch (_: Exception) { }
+            viewModel.clearCheckoutUrl()
+        }
+    }
+
+    LaunchedEffect(globalSetupCardUrl) {
+        if (globalSetupCardUrl != null) {
+            try {
+                globalContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(globalSetupCardUrl)))
+            } catch (_: Exception) { }
+            viewModel.clearSetupCardUrl()
+        }
+    }
+
+    // KYC state
+    val kycStatus by viewModel.kycStatus.collectAsStateWithLifecycle()
+    val kycLoading by viewModel.kycLoading.collectAsStateWithLifecycle()
+    val kycError by viewModel.kycError.collectAsStateWithLifecycle()
+    val kycMessage by viewModel.kycMessage.collectAsStateWithLifecycle()
+
     // Auth screen state
     var showSignup by remember { mutableStateOf(false) }
 
@@ -125,6 +209,38 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                 error = loginError
             )
         }
+    } else if (kycStatus == "checking") {
+        // Show loading while checking KYC status
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(C.background),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = PrimaryBlue)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Checking verification status...", color = C.textSecondary, fontSize = 14.sp)
+            }
+        }
+    } else if (kycStatus == "none" || kycStatus == "rejected") {
+        // Show KYC form
+        KycScreen(
+            onSubmit = { name, cnicUri, selfieUri ->
+                viewModel.submitKyc(name, cnicUri, selfieUri)
+            },
+            isLoading = kycLoading,
+            error = kycError,
+            rejectionMessage = if (kycStatus == "rejected") kycMessage else null,
+            onLogout = { viewModel.logout() }
+        )
+    } else if (kycStatus == "pending") {
+        // Show pending screen
+        KycPendingScreen(
+            onRefreshStatus = { viewModel.checkKycStatus() },
+            onLogout = { viewModel.logout() },
+            isChecking = kycStatus == "checking"
+        )
     } else {
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -190,24 +306,45 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
 
                     drawerItems.forEach { screen ->
                         val isDrawerSelected = currentRoute == screen.route
+                        val unlocked = isScreenUnlocked(screen.route)
                         NavigationDrawerItem(
                             icon = {
-                                Icon(
-                                    screen.icon,
-                                    contentDescription = null,
-                                    tint = if (isDrawerSelected) PrimaryBlue else C.textMuted
-                                )
+                                if (unlocked) {
+                                    Icon(
+                                        screen.icon,
+                                        contentDescription = null,
+                                        tint = if (isDrawerSelected) PrimaryBlue else C.textMuted
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Filled.Lock,
+                                        contentDescription = null,
+                                        tint = C.textMuted.copy(alpha = 0.5f)
+                                    )
+                                }
                             },
                             label = {
                                 Text(
                                     screen.title,
-                                    color = if (isDrawerSelected) PrimaryBlue else C.textSecondary
+                                    color = if (!unlocked) C.textMuted.copy(alpha = 0.5f)
+                                           else if (isDrawerSelected) PrimaryBlue
+                                           else C.textSecondary
                                 )
+                            },
+                            badge = {
+                                if (!unlocked) {
+                                    Icon(Icons.Filled.Lock, contentDescription = null, tint = C.textMuted.copy(alpha = 0.4f), modifier = Modifier.size(14.dp))
+                                }
                             },
                             selected = isDrawerSelected,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                if (!isDrawerSelected) {
+                                if (!unlocked) {
+                                    navController.navigate(Screen.Pricing.route) {
+                                        popUpTo(Screen.Dashboard.route) { saveState = true }
+                                        launchSingleTop = true
+                                    }
+                                } else if (!isDrawerSelected) {
                                     navController.navigate(screen.route) {
                                         popUpTo(Screen.Dashboard.route) { saveState = true }
                                         launchSingleTop = true
@@ -296,7 +433,10 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                                 ) {
                                     bottomNavItems.forEach { screen ->
                                         val isSelected = currentRoute == screen.route
-                                        val itemColor = if (isSelected) PrimaryBlue else C.textMuted
+                                        val unlocked = isScreenUnlocked(screen.route)
+                                        val itemColor = if (!unlocked) C.textMuted.copy(alpha = 0.4f)
+                                                        else if (isSelected) PrimaryBlue
+                                                        else C.textMuted
 
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -306,7 +446,12 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                                                     interactionSource = remember { MutableInteractionSource() },
                                                     indication = null
                                                 ) {
-                                                    if (!isSelected) {
+                                                    if (!unlocked) {
+                                                        navController.navigate(Screen.Pricing.route) {
+                                                            popUpTo(Screen.Dashboard.route) { saveState = true }
+                                                            launchSingleTop = true
+                                                        }
+                                                    } else if (!isSelected) {
                                                         navController.navigate(screen.route) {
                                                             popUpTo(Screen.Dashboard.route) { saveState = true }
                                                             launchSingleTop = true
@@ -316,30 +461,28 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                                                 }
                                                 .padding(horizontal = 16.dp, vertical = 4.dp)
                                         ) {
-                                            // Pill indicator behind icon when selected
                                             Box(
                                                 modifier = Modifier
                                                     .width(48.dp)
                                                     .height(28.dp)
                                                     .clip(RoundedCornerShape(14.dp))
                                                     .background(
-                                                        if (isSelected) PrimaryBlue.copy(alpha = if (isDark) 0.18f else 0.12f)
+                                                        if (isSelected && unlocked) PrimaryBlue.copy(alpha = if (isDark) 0.18f else 0.12f)
                                                         else Color.Transparent
                                                     ),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Icon(
-                                                    screen.icon,
-                                                    contentDescription = screen.title,
-                                                    tint = itemColor,
-                                                    modifier = Modifier.size(22.dp)
-                                                )
+                                                if (unlocked) {
+                                                    Icon(screen.icon, contentDescription = screen.title, tint = itemColor, modifier = Modifier.size(22.dp))
+                                                } else {
+                                                    Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = itemColor, modifier = Modifier.size(18.dp))
+                                                }
                                             }
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 screen.title,
                                                 fontSize = 10.sp,
-                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                                fontWeight = if (isSelected && unlocked) FontWeight.SemiBold else FontWeight.Normal,
                                                 color = itemColor,
                                                 maxLines = 1
                                             )
@@ -379,7 +522,8 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             },
                             isLoading = loading,
                             onNavigateToStore = {
-                                navController.navigate(Screen.Store.route) {
+                                val dest = if (custPackage == "free") Screen.Pricing.route else Screen.Store.route
+                                navController.navigate(dest) {
                                     popUpTo(Screen.Dashboard.route) { saveState = true }
                                     launchSingleTop = true
                                 }
@@ -469,12 +613,9 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                         val packages by viewModel.minutesPackages.collectAsStateWithLifecycle()
                         val packagesLoading by viewModel.packagesLoading.collectAsStateWithLifecycle()
                         val purchaseMsg by viewModel.purchaseMessage.collectAsStateWithLifecycle()
-                        val payMethod by viewModel.paymentMethod.collectAsStateWithLifecycle()
-
                         LaunchedEffect(Unit) {
                             viewModel.loadAvailableNumbers()
                             viewModel.loadMinutesPackages()
-                            viewModel.loadPaymentMethod()
                         }
 
                         StoreScreen(
@@ -485,18 +626,8 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             onRefreshNumbers = { viewModel.refreshNumbers() },
                             minutesPackages = packages,
                             packagesLoading = packagesLoading,
-                            onBuyPackage = { pkg ->
-                                viewModel.purchaseWithCard("minutes", pkg.id, "${pkg.minutes} Minutes", pkg.price,
-                                    mapOf("minutes" to pkg.minutes))
-                            },
-                            onBuyNumber = { num ->
-                                viewModel.purchaseWithCard("number", num.phoneNumber, num.phoneNumber ?: "Phone", num.monthlyPrice,
-                                    mapOf("phoneNumber" to num.phoneNumber, "friendlyName" to num.friendlyName,
-                                          "numberType" to num.type, "monthlyPrice" to num.monthlyPrice))
-                            },
-                            onMockBuyPackage = { viewModel.mockPurchaseMinutes(it) },
-                            onMockBuyNumber = { viewModel.mockPurchaseNumber(it) },
-                            hasCard = payMethod?.hasCard == true,
+                            onBuyPackage = { viewModel.purchaseMinutes(it) },
+                            onBuyNumber = { viewModel.purchaseNumber(it) },
                             purchaseMessage = purchaseMsg
                         )
                     }
@@ -551,26 +682,12 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                         val myNums by viewModel.myNumbers.collectAsStateWithLifecycle()
                         val purchases by viewModel.purchaseHistory.collectAsStateWithLifecycle()
                         val payMethod by viewModel.paymentMethod.collectAsStateWithLifecycle()
-                        val cardUrl by viewModel.setupCardUrl.collectAsStateWithLifecycle()
-                        val context = androidx.compose.ui.platform.LocalContext.current
-
                         LaunchedEffect(Unit) {
                             viewModel.loadProfile()
                             viewModel.loadAttendance()
                             viewModel.loadMyAccount()
                             viewModel.loadPaymentMethod()
                             viewModel.loadCallingStatus()
-                        }
-
-                        // Open Stripe card setup in browser
-                        LaunchedEffect(cardUrl) {
-                            if (cardUrl != null) {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(cardUrl))
-                                    context.startActivity(intent)
-                                } catch (_: Exception) { }
-                                viewModel.clearSetupCardUrl()
-                            }
                         }
 
                         ProfileScreen(
@@ -589,6 +706,40 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             purchaseHistory = purchases,
                             paymentMethod = payMethod,
                             onAddCard = { viewModel.setupCard() }
+                        )
+                    }
+
+                    composable(Screen.Pricing.route) {
+                        val pkgs by viewModel.subPackages.collectAsStateWithLifecycle()
+                        val msg by viewModel.purchaseMessage.collectAsStateWithLifecycle()
+
+                        LaunchedEffect(Unit) { viewModel.loadSubPackages() }
+
+                        PricingScreen(
+                            packages = pkgs,
+                            currentPackage = custPackage,
+                            onBuyPackage = { viewModel.buyPackage(it) },
+                            purchaseMessage = msg,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(Screen.PurchaseSuccess.route) {
+                        PurchaseSuccessScreen(
+                            onGoToDashboard = {
+                                viewModel.dismissPurchaseSuccess()
+                                navController.navigate(Screen.Dashboard.route) {
+                                    popUpTo(Screen.Dashboard.route) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            },
+                            onGoToStore = {
+                                viewModel.dismissPurchaseSuccess()
+                                navController.navigate(Screen.Store.route) {
+                                    popUpTo(Screen.Dashboard.route) { saveState = true }
+                                    launchSingleTop = true
+                                }
+                            }
                         )
                     }
 
